@@ -57,6 +57,18 @@ const BRAND = {
   border: "#c7d6ef",
 };
 
+// デバイスID生成（ログイン不要のダッシュボード追跡用）
+function getDeviceId(): string {
+  const key = "dscss_acs_device_id";
+  if (typeof window === "undefined") return "unknown";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
 function QuizContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
@@ -161,6 +173,19 @@ function QuizContent() {
       const existingRawScore = existingVal > 10 ? Math.round(existingVal / 20) : existingVal;
       prog[progressKey] = Math.max(existingRawScore, score);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prog));
+
+      // ダッシュボード用：ログイン不要で attempts テーブルに保存
+      fetch("/api/attempts/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: getDeviceId(),
+          stageId: stageNum,
+          classId: classNum,
+          score: score,
+          totalQuestions: questions.length,
+        }),
+      }).catch(() => {});
 
       if (session?.user?.email) {
         fetch("/api/quiz/save", {
