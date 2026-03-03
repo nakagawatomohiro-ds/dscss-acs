@@ -131,3 +131,19 @@ export async function logActivity(params: {
     )
   `;
 }
+
+// ── ダッシュボード用 attempts テーブル保存（ログイン不要） ──
+export async function saveAttempt(params: {
+  deviceId: string;
+  stageId: number;
+  classId: number;
+  score: number;
+  totalQuestions: number;
+}) {
+  const sql = getDb();
+  const category = `S${params.stageId}-C${params.classId}`;
+  await sql`
+    INSERT INTO attempts (id, device_id, app_key, mode, category, status, total_questions, correct_count, started_at, finished_at)
+    VALUES (gen_random_uuid(), ${params.deviceId}, 'acs', 'learn', ${category}, 'finished', ${params.totalQuestions}, ${params.score}, NOW(), NOW())
+  `;
+}
