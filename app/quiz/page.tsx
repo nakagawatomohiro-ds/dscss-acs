@@ -155,11 +155,9 @@ function QuizContent() {
       const progressKey = `${stageNum}-${classNum}`;
       const raw = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
       const prog = raw ? JSON.parse(raw) : {};
-      prog[progressKey] = {
-        completedQuestions: questions.length,
-        score: score,
-        finished: true,
-      };
+      const earnedPoints = score * POINTS_PER_CORRECT;
+      const existingPoints = typeof prog[progressKey] === "number" ? prog[progressKey] : 0;
+      prog[progressKey] = Math.max(existingPoints, earnedPoints);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prog));
 
       if (session?.user?.email) {
