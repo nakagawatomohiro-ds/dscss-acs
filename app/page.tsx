@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthHeader from "./components/AuthHeader";
-import { STAGES, CLASSES, MAX_POINTS, RANKS, getRank } from "@/lib/constants";
+import { STAGES, CLASSES, MAX_POINTS, RANKS, getRank, POINTS_PER_CORRECT } from "@/lib/constants";
 
 interface ProgressData {
   [key: string]: number;
@@ -35,24 +35,41 @@ export default function Home() {
   useEffect(() => {
     const loadProgress = async () => {
       try {
+        // Helper: extract numeric points from a progress value
+        // Old format: { score: N, completedQuestions: M, finished: bool } → N * POINTS_PER_CORRECT
+        // New format: number (already points)
+        const toPoints = (val: any): number => {
+          if (typeof val === "number") return val;
+          if (val && typeof val === "object" && typeof val.score === "number") {
+            return val.score * POINTS_PER_CORRECT;
+          }
+          return 0;
+        };
+
         // First, load from localStorage
         const storedProgress = localStorage.getItem("dscss_acs_progress");
-        const localData: ProgressData = storedProgress
-          ? JSON.parse(storedProgress)
-          : {};
+        const rawLocal = storedProgress ? JSON.parse(storedProgress) : {};
+        const localData: ProgressData = {};
+        Object.entries(rawLocal).forEach(([key, val]) => {
+          localData[key] = toPoints(val);
+        });
 
         // Then fetch from DB
         const response = await fetch("/api/quiz/load");
         const dbData = await response.json();
 
-        // Merge: DB takes priority if higher score
+        // Merge: higher score wins
         const merged: MergedProgress = { ...localData };
-        if (dbData?.progress) {
-          Object.entries(dbData.progress).forEach(([key, dbScore]: [string, any]) => {
-            const localScore = localData[key] ?? 0;
-            merged[key] = Math.max(localScore, dbScore);
+        if (dbData && typeof dbData === "object" && !dbData.error) {
+          Object.entries(dbData).forEach(([key, val]: [string, any]) => {
+            const dbPoints = toPoints(val);
+            const localPoints = localData[key] ?? 0;
+            merged[key] = Math.max(localPoints, dbPoints);
           });
         }
+
+        // Migrate localStorage to new format (clean numbers)
+        localStorage.setItem("dscss_acs_progress", JSON.stringify(merged));
 
         // Calculate total points
         const total = Object.values(merged).reduce((sum, score) => sum + score, 0);
@@ -73,9 +90,14 @@ export default function Home() {
       } catch {
         // Silent fail - use localStorage only
         const storedProgress = localStorage.getItem("dscss_acs_progress");
-        const localData: ProgressData = storedProgress
-          ? JSON.parse(storedProgress)
-          : {};
+        const rawLocal = storedProgress ? JSON.parse(storedProgress) : {};
+        const localData: ProgressData = {};
+        Object.entries(rawLocal).forEach(([key, val]) => {
+          const pts = typeof val === "number" ? val :
+            (val && typeof val === "object" && typeof (val as any).score === "number")
+              ? (val as any).score * POINTS_PER_CORRECT : 0;
+          localData[key] = pts;
+        });
         const total = Object.values(localData).reduce((sum, score) => sum + score, 0);
         setProgress(localData);
         setTotalPoints(total);
